@@ -62,6 +62,7 @@ pub fn handler_initialize_sale(
     commitment_start: i64,
     commitment_end: i64,
     score_merkle_root: [u8; 32],
+    drand_reveal_round_override: Option<u64>,
 ) -> Result<()> {
     require!(raise_min > 0, ErrorCode::InvalidRaiseRange);  
     require!(raise_min <= raise_max, ErrorCode::InvalidRaiseRange);
@@ -132,7 +133,7 @@ pub fn handler_initialize_sale(
     // Authority control flags
     sale.is_paused = false;
     sale.claims_enabled = false;
-    sale.drand_reveal_round = timestamp_to_round(commitment_end);
+    sale.drand_reveal_round = drand_reveal_round_override.unwrap_or_else(|| timestamp_to_round(commitment_end));
     sale.drand_chain_hash = QUICKNET_CHAIN_HASH;
     sale.reveal_count = 0;
     sale.all_bids_revealed = false;

@@ -44,6 +44,7 @@ pub mod fundraising_program {
             commitment_start,
             commitment_end,
             score_merkle_root,
+            drand_reveal_round_override,
         )
     }
 

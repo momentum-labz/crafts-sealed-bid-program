@@ -69,5 +69,5 @@ pub enum SaleStatus {
     Settled = 6,
     Finalized = 7,
     Cancelled = 8,
-    Refunding = 9,        
+    Refunding = 9,
 }

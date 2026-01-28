@@ -44,18 +44,3 @@ pub fn verify_drand_signature(
 
     Ok(())
 }
-
-#[cfg(feature = "full-bls-verification")]
-pub fn verify_drand_signature_full(
-    round: u64,
-    signature: &[u8; 48],
-    public_key: &[u8; 96], 
-) -> Result<()> {
-    use solana_program::alt_bn128::prelude::*;
-
-    // TODO: Implement full BLS verification
-    // 1. Hash round to G1 point
-    // 2. Verify pairing: e(signature, g2_generator) == e(message_hash, public_key)
-
-    Ok(())
-}

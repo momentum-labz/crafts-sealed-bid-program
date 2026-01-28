@@ -9,8 +9,8 @@ pub struct SealedBid {
     pub amount: u64,                 // 8 bytes - USDC committed
 
     // Bid Data (v0.2: encrypted bids only)
-    #[max_len(256)]
-    pub max_fdv_encrypted: Option<Vec<u8>>, // Timelock ciphertext (~256 bytes)
+    #[max_len(600)]
+    pub max_fdv_encrypted: Option<Vec<u8>>, // Timelock ciphertext
     pub max_fdv_plaintext: Option<u64>, // 9 bytes - After reveal (for encrypted bids)
     pub drand_round: u64,            // 8 bytes - Drand round used for encryption
     pub bid_revealed: bool,          // 1 byte - Whether bid has been revealed

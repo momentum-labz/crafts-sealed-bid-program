@@ -176,6 +176,9 @@ pub enum ErrorCode {
     #[msg("Bid already revealed")]
     BidAlreadyRevealed,
 
+    #[msg("All bids must be revealed before settlement")]
+    BidsNotRevealed,
+
     #[msg("Commitment window not closed")]
     CommitmentWindowNotClosed,
 

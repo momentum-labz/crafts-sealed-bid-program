@@ -91,7 +91,7 @@ pub fn handler_commit(
     require!(amount >= sale.min_commitment, ErrorCode::InvalidAmount);
 
     require!(!max_fdv_encrypted.is_empty(), ErrorCode::EncryptedBidRequired);
-    require!(max_fdv_encrypted.len() <= 256, ErrorCode::InvalidParameters);
+    require!(max_fdv_encrypted.len() <= 600, ErrorCode::InvalidParameters);
 
     require!(
         drand_round == sale.drand_reveal_round,
@@ -189,7 +189,7 @@ pub fn handler_commit(
         user: ctx.accounts.user.key(),
         amount,
         total_amount: bid.amount,
-        max_fdv: 0, 
+        max_fdv: 0,
     });
 
     Ok(())

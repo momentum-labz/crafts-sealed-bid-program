@@ -12,6 +12,7 @@ pub struct ProposeSettlement<'info> {
         has_one = authority,
         constraint = (
             sale.status == SaleStatus::Active ||
+            sale.status == SaleStatus::CommitmentEnded ||
             sale.status == SaleStatus::Proposed ||
             sale.status == SaleStatus::Verifying
         ) @ ErrorCode::InvalidSaleStatus,
@@ -60,6 +61,11 @@ pub fn handler_propose_settlement(
     require!(
         sale.total_users > 0,
         ErrorCode::InsufficientDemand
+    );
+
+    require!(
+        sale.all_bids_revealed,
+        ErrorCode::BidsNotRevealed
     );
 
     require!(

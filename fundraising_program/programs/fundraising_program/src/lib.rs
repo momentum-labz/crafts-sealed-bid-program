@@ -61,8 +61,10 @@ pub mod fundraising_program {
         drand_round: u64,
         score: u32,
         score_proof: Vec<[u8; 32]>,
+        hash_commitment: [u8; 32],
+        salt: [u8; 32],
     ) -> Result<()> {
-        handler_commit(ctx, amount, max_fdv_encrypted, drand_round, score, score_proof)
+        handler_commit(ctx, amount, max_fdv_encrypted, drand_round, score, score_proof, hash_commitment, salt)
     }
 
     /// Close commitment window and transition to revealing status

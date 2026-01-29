@@ -1,4 +1,5 @@
 use anchor_lang::prelude::*;
+use sha2::{Sha256, Digest};
 use crate::state::{Sale, SaleStatus, SealedBid};
 use crate::errors::ErrorCode;
 use crate::utils::verify_drand_signature;
@@ -77,6 +78,16 @@ pub fn handler_batch_reveal_bids<'info>(
             ErrorCode::InvalidFdvRange
         );
 
+        let mut hasher = Sha256::new();
+        hasher.update(&revealed_bid.max_fdv.to_le_bytes());
+        hasher.update(&bid.salt);
+        let computed_hash: [u8; 32] = hasher.finalize().into();
+        require!(
+            computed_hash == bid.hash_commitment,
+            ErrorCode::HashCommitmentMismatch
+        );
+
+        // Write revealed plaintext
         bid.max_fdv_plaintext = Some(revealed_bid.max_fdv);
         bid.bid_revealed = true;
 

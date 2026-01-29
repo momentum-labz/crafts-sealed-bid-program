@@ -60,6 +60,8 @@ pub fn handler_commit(
     drand_round: u64,
     score: u32,
     score_proof: Vec<[u8; 32]>,
+    hash_commitment: [u8; 32],
+    salt: [u8; 32],
 ) -> Result<()> {
     require!(
         score_proof.len() <= MAX_MERKLE_PROOF_DEPTH,
@@ -126,6 +128,8 @@ pub fn handler_commit(
         bid.bid_revealed = false;
         bid.drand_round = 0;
         bid.max_fdv_encrypted = None;
+        bid.hash_commitment = hash_commitment;
+        bid.salt = salt;
 
         sale.total_users = sale.total_users.checked_add(1).ok_or(ErrorCode::ArithmeticOverflow)?;
     } else {

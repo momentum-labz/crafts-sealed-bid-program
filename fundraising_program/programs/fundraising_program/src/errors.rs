@@ -184,4 +184,7 @@ pub enum ErrorCode {
 
     #[msg("Sale not in revealing status")]
     SaleNotRevealing,
+
+    #[msg("Hash commitment verification failed - revealed bid doesn't match commitment")]
+    HashCommitmentMismatch,
 }

@@ -11,10 +11,9 @@ pub struct ProposeSettlement<'info> {
         bump = sale.bump,
         has_one = authority,
         constraint = (
-            sale.status == SaleStatus::Active ||
-            sale.status == SaleStatus::CommitmentEnded ||
-            sale.status == SaleStatus::Proposed ||
-            sale.status == SaleStatus::Verifying
+            sale.status == SaleStatus::CommitmentEnded || 
+            sale.status == SaleStatus::Proposed || 
+            sale.status == SaleStatus::Verifying 
         ) @ ErrorCode::InvalidSaleStatus,
     )]
     pub sale: Account<'info, Sale>,

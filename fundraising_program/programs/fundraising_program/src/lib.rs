@@ -31,7 +31,6 @@ pub mod fundraising_program {
         commitment_start: i64,
         commitment_end: i64,
         score_merkle_root: [u8; 32],
-        drand_reveal_round_override: Option<u64>, 
     ) -> Result<()> {
         handler_initialize_sale(
             ctx,
@@ -45,7 +44,6 @@ pub mod fundraising_program {
             commitment_start,
             commitment_end,
             score_merkle_root,
-            drand_reveal_round_override,
         )
     }
 

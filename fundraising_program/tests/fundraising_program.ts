@@ -300,7 +300,6 @@ describe('V0.2-Drand Sealed-Bid Auction', () => {
         new BN(commitmentStart),
         new BN(commitmentEnd),
         Array.from(merkleTree.root),
-        null,
       )
       .accounts({
         sale: salePda,

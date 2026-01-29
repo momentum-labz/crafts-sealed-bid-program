@@ -207,6 +207,11 @@ async function surfnetTimeTravel(
   });
   const result = await response.json();
   if (result.error) {
+    const errorData = typeof result.error.data === "string" ? result.error.data : "";
+    if (errorData.includes("Cannot travel to past timestamp")) {
+      console.log(`  [Surfpool] Clock already past target ${targetTimestampSeconds}, no timeTravel needed`);
+      return;
+    }
     throw new Error(`surfnet_timeTravel failed: ${JSON.stringify(result.error)}`);
   }
   console.log(`  [Surfpool] Clock set to ${targetTimestampSeconds} (${new Date(targetTimestampSeconds * 1000).toISOString()})`);
@@ -347,6 +352,11 @@ describe("V0.2-Drand Sealed-Bid Auction", () => {
     const COMMITMENT_WINDOW_SECONDS = 900; // 15 minutes
     const QUICKNET_GENESIS = 1692803367;
     const QUICKNET_PERIOD = 3;
+
+    if (IS_SURFPOOL) {
+      await advanceTime(connection, authority, 1);
+    }
+
     const blockchainTime = await getBlockTime(connection);
     const realTimeNow = Math.floor(Date.now() / 1000);
     const syncedTime = Math.max(blockchainTime, realTimeNow);
@@ -355,7 +365,7 @@ describe("V0.2-Drand Sealed-Bid Auction", () => {
     console.log(`Real-world time: ${realTimeNow}`);
     console.log(`Using synced time: ${syncedTime}`);
 
-    commitmentStart = syncedTime + 10;
+    commitmentStart = syncedTime + 30;
     commitmentEnd = commitmentStart + COMMITMENT_WINDOW_SECONDS;
 
     drandRevealRound = Math.ceil((commitmentEnd - QUICKNET_GENESIS) / QUICKNET_PERIOD);
@@ -544,8 +554,24 @@ describe("V0.2-Drand Sealed-Bid Auction", () => {
     console.log("\n=== Test 3: Close Commitment Window ===");
 
     if (IS_SURFPOOL) {
-      await surfnetTimeTravel(connection, commitmentEnd + 5);
-      console.log(`✓ [Surfpool] Clock jumped past commitment end`);
+      let currentRound = await getCurrentDrandRound();
+      if (currentRound < drandRevealRound) {
+        const roundsToWait = drandRevealRound - currentRound;
+        const secondsToWait = roundsToWait * 3 + 5;
+        console.log(` Waiting ~${Math.ceil(secondsToWait / 60)} min for drand round ${drandRevealRound} (current: ${currentRound})...`);
+        console.log(`  (commitment window closes at the same time — no extra wait)`);
+
+        while (currentRound < drandRevealRound) {
+          const remaining = (drandRevealRound - currentRound) * 3;
+          console.log(`  ~${Math.ceil(remaining / 60)} min remaining (current round: ${currentRound}, target: ${drandRevealRound})...`);
+          await sleep(30000);
+          currentRound = await getCurrentDrandRound();
+        }
+      }
+      console.log(`✓ Drand round ${drandRevealRound} is available (current: ${currentRound})`);
+
+     await surfnetTimeTravel(connection, commitmentEnd + 5);
+      console.log(`✓ [Surfpool] Clock past commitment end`);
     } else {
       let realTimeNow = Math.floor(Date.now() / 1000);
 
@@ -597,8 +623,8 @@ describe("V0.2-Drand Sealed-Bid Auction", () => {
     let currentRound = await getCurrentDrandRound();
     if (currentRound < drandRevealRound) {
       const roundsToWait = drandRevealRound - currentRound;
-      const secondsToWait = roundsToWait * 3 + 5; // 3s per round + buffer
-      console.log(`⏳ Waiting ~${Math.ceil(secondsToWait / 60)} min for drand round ${drandRevealRound} (current: ${currentRound})...`);
+      const secondsToWait = roundsToWait * 3 + 5;
+      console.log(` Waiting ~${Math.ceil(secondsToWait / 60)} min for drand round ${drandRevealRound} (current: ${currentRound})...`);
 
       while (currentRound < drandRevealRound) {
         const remaining = (drandRevealRound - currentRound) * 3;

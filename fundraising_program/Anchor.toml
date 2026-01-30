@@ -6,7 +6,7 @@ resolution = true
 skip-lint = false
 
 [programs.localnet]
-fundraising_program = "962ZtGmofWxAFJCHugzBpxYgZiLUQ9qrTXMynwYo8sFX"
+fundraising_program = "BrJT154TXgvFTjhRUhVHREmVRdUZqJtAh7rSbWjPSFuZ"
 
 [programs.devnet]
 fundraising_program = "G88z8BvDcxMGQ8f3qNNvUayYAiFP82k2ihoZMKrXEGuM"

@@ -48,7 +48,7 @@ pub struct InitializeSale<'info> {
 pub const MIN_COMMITMENT: u64 = 5_000_000;
 
 /// Minimum commitment window: 15 minutes
-pub const MIN_COMMITMENT_WINDOW_SECONDS: i64 = 15 * 60;
+pub const MIN_COMMITMENT_WINDOW_SECONDS: i64 = 1 * 60; // set to 1 minute for testing, 15 minutes for production
 
 pub fn handler_initialize_sale(
     ctx: Context<InitializeSale>,

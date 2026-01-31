@@ -15,8 +15,7 @@ pub struct SealedBid {
     pub drand_round: u64,            // 8 bytes - Drand round used for encryption
     pub bid_revealed: bool,          // 1 byte - Whether bid has been revealed
 
-    pub hash_commitment: [u8; 32],   // 32 bytes 
-    pub salt: [u8; 32],             // 32 bytes
+    pub hash_commitment: [u8; 32],   // 32 bytes
 
     pub cleared: bool,               // 1 byte
     pub is_marginal: bool,           // 1 byte

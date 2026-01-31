@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 
-declare_id!("BrJT154TXgvFTjhRUhVHREmVRdUZqJtAh7rSbWjPSFuZ");
+declare_id!("C8iyvT3eH62U8nrg3cbZMABLR6DEYsByMknPDEamWLFH");
 
 pub mod instructions;
 pub mod state;
@@ -62,9 +62,8 @@ pub mod fundraising_program {
         score: u32,
         score_proof: Vec<[u8; 32]>,
         hash_commitment: [u8; 32],
-        salt: [u8; 32],
     ) -> Result<()> {
-        handler_commit(ctx, amount, max_fdv_encrypted, drand_round, score, score_proof, hash_commitment, salt)
+        handler_commit(ctx, amount, max_fdv_encrypted, drand_round, score, score_proof, hash_commitment)
     }
 
     /// Close commitment window and transition to revealing status

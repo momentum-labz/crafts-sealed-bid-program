@@ -6,6 +6,12 @@ use crate::errors::ErrorCode;
 use crate::events::SaleInitialized;
 use crate::utils::{timestamp_to_round, QUICKNET_CHAIN_HASH};
 
+/// NOTE (MEDIUM - Governance): The authority is a single signer with full
+/// control over sale lifecycle (init, fund, propose, pause, cancel, refund).
+/// For production deployments, consider:
+/// 1. Using a Squads multisig as the authority
+/// 2. Adding a timelock for critical operations (cancel, refund)
+/// 3. Separating roles (proposer vs admin vs emergency)
 #[derive(Accounts)]
 pub struct InitializeSale<'info> {
     #[account(
@@ -16,7 +22,7 @@ pub struct InitializeSale<'info> {
         bump,
     )]
     pub sale: Account<'info, Sale>,
-    
+
     #[account(mut)]
     pub authority: Signer<'info>,
     

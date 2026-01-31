@@ -50,6 +50,13 @@ pub struct Commit<'info> {
 }
 
 /// Top up an existing bid with additional USDC (no bid price change).
+///
+/// NOTE (MEDIUM): Users cannot update their bid price (hash_commitment /
+/// max_fdv_encrypted) after the initial commit. To support bid price updates,
+/// a future `update_bid` instruction could allow replacing hash_commitment and
+/// max_fdv_encrypted while the commitment window is still open. This would
+/// require the user to generate a new salt and re-encrypt with the same drand
+/// round. The old ciphertext would be overwritten.
 #[derive(Accounts)]
 pub struct TopupCommit<'info> {
     #[account(

@@ -66,6 +66,16 @@ pub mod fundraising_program {
         handler_commit(ctx, amount, max_fdv_encrypted, drand_round, score, score_proof, hash_commitment)
     }
 
+    /// Update bid price (new encrypted bid + hash commitment)
+    pub fn update_bid(
+        ctx: Context<UpdateBid>,
+        max_fdv_encrypted: Vec<u8>,
+        drand_round: u64,
+        hash_commitment: [u8; 32],
+    ) -> Result<()> {
+        handler_update_bid(ctx, max_fdv_encrypted, drand_round, hash_commitment)
+    }
+
     /// Top up an existing bid with additional USDC
     pub fn topup_commit(
         ctx: Context<TopupCommit>,

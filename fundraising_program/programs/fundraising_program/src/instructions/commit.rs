@@ -49,14 +49,36 @@ pub struct Commit<'info> {
     pub system_program: Program<'info, System>,
 }
 
+/// Update bid price (hash_commitment + encrypted bid) on an existing bid.
+/// USDC amount stays the same — use topup_commit to add more USDC.
+#[derive(Accounts)]
+pub struct UpdateBid<'info> {
+    #[account(
+        mut,
+        seeds = [b"sale", sale.authority.as_ref(), sale.token_mint.as_ref()],
+        bump = sale.bump,
+        constraint = sale.status == SaleStatus::Active @ ErrorCode::SaleNotActive,
+        constraint = !sale.is_paused @ ErrorCode::SaleNotActive,
+    )]
+    pub sale: Account<'info, Sale>,
+
+    #[account(
+        mut,
+        seeds = [b"sealed_bid", sale.key().as_ref(), user.key().as_ref()],
+        bump = sealed_bid.bump,
+        constraint = sealed_bid.is_initialized @ ErrorCode::InvalidParameters,
+        constraint = sealed_bid.sale == sale.key() @ ErrorCode::InvalidParameters,
+        constraint = sealed_bid.user == user.key() @ ErrorCode::InvalidParameters,
+        constraint = !sealed_bid.claimed @ ErrorCode::AlreadyClaimed,
+        constraint = !sealed_bid.bid_revealed @ ErrorCode::BidAlreadyRevealed,
+    )]
+    pub sealed_bid: Account<'info, SealedBid>,
+
+    #[account(mut)]
+    pub user: Signer<'info>,
+}
+
 /// Top up an existing bid with additional USDC (no bid price change).
-///
-/// NOTE (MEDIUM): Users cannot update their bid price (hash_commitment /
-/// max_fdv_encrypted) after the initial commit. To support bid price updates,
-/// a future `update_bid` instruction could allow replacing hash_commitment and
-/// max_fdv_encrypted while the commitment window is still open. This would
-/// require the user to generate a new salt and re-encrypt with the same drand
-/// round. The old ciphertext would be overwritten.
 #[derive(Accounts)]
 pub struct TopupCommit<'info> {
     #[account(
@@ -208,6 +230,49 @@ pub fn handler_commit(
         total_amount: bid.amount,
         max_fdv: 0,
     });
+
+    Ok(())
+}
+
+pub fn handler_update_bid(
+    ctx: Context<UpdateBid>,
+    max_fdv_encrypted: Vec<u8>,
+    drand_round: u64,
+    hash_commitment: [u8; 32],
+) -> Result<()> {
+    let sale = &ctx.accounts.sale;
+    let bid = &mut ctx.accounts.sealed_bid;
+
+    let now = Clock::get()?.unix_timestamp;
+
+    require!(
+        now >= sale.commitment_start,
+        ErrorCode::OutsideCommitmentWindow
+    );
+    require!(
+        now <= sale.commitment_end,
+        ErrorCode::CommitmentWindowClosed
+    );
+
+    require!(!max_fdv_encrypted.is_empty(), ErrorCode::EncryptedBidRequired);
+    require!(max_fdv_encrypted.len() <= 600, ErrorCode::InvalidParameters);
+
+    require!(
+        drand_round == sale.drand_reveal_round,
+        ErrorCode::InvalidDrandRound
+    );
+
+    bid.max_fdv_encrypted = Some(max_fdv_encrypted);
+    bid.hash_commitment = hash_commitment;
+    bid.drand_round = drand_round;
+    bid.bid_revealed = false;
+    bid.max_fdv_plaintext = None;
+
+    msg!(
+        "Bid updated: user={}, drand_round={}",
+        ctx.accounts.user.key(),
+        drand_round
+    );
 
     Ok(())
 }

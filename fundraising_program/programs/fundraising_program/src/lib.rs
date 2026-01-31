@@ -66,6 +66,14 @@ pub mod fundraising_program {
         handler_commit(ctx, amount, max_fdv_encrypted, drand_round, score, score_proof, hash_commitment)
     }
 
+    /// Top up an existing bid with additional USDC
+    pub fn topup_commit(
+        ctx: Context<TopupCommit>,
+        amount: u64,
+    ) -> Result<()> {
+        handler_topup_commit(ctx, amount)
+    }
+
     /// Close commitment window and transition to revealing status
     pub fn close_commitment_window(ctx: Context<CloseCommitmentWindow>) -> Result<()> {
         handler_close_commitment_window(ctx)

@@ -104,6 +104,7 @@ pub mod fundraising_program {
     }
 
     /// fill_rate is in basis points: 10000 = 100%, 5000 = 50% (2x oversubscribed)
+    /// Permissionless after 30-minute authority window following CommitmentEnded.
     pub fn propose_settlement(
         ctx: Context<ProposeSettlement>,
         clearing_fdv: u64,

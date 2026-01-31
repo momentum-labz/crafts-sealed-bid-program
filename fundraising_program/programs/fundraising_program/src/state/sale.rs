@@ -53,6 +53,7 @@ pub struct Sale {
     pub drand_chain_hash: [u8; 8],   // 8 bytes - Quicknet chain hash prefix for verification
     pub reveal_count: u32,           // 4 bytes - Number of bids revealed
     pub all_bids_revealed: bool,     // 1 byte - Whether all bids have been revealed
+    pub commitment_ended_at: i64,    // 8 bytes - Timestamp when all bids revealed (CommitmentEnded)
 
     #[max_len(100)]
     pub name: String,                // Variable

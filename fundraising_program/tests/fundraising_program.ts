@@ -720,7 +720,7 @@ describe('V0.2-Drand Sealed-Bid Auction', () => {
       .proposeSettlement(CLEARING_FDV, new BN(10000), null, null)
       .accounts({
         sale: salePda,
-        authority: authority.publicKey,
+        proposer: authority.publicKey,
       })
       .rpc()
 

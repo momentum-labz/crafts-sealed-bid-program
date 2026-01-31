@@ -187,4 +187,7 @@ pub enum ErrorCode {
 
     #[msg("Hash commitment verification failed - revealed bid doesn't match commitment")]
     HashCommitmentMismatch,
+
+    #[msg("Unauthorized - only authority can perform this action during the authority window")]
+    Unauthorized,
 }

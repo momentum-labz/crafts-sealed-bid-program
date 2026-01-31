@@ -3,21 +3,24 @@ use crate::state::{Sale, SaleStatus};
 use crate::errors::ErrorCode;
 use crate::events::SettlementProposed;
 
+/// Authority-first window: only authority can propose in the first 30 minutes
+/// after CommitmentEnded. After that, anyone can propose (permissionless).
+pub const AUTHORITY_PROPOSAL_WINDOW_SECONDS: i64 = 30 * 60;
+
 #[derive(Accounts)]
 pub struct ProposeSettlement<'info> {
     #[account(
         mut,
-        seeds = [b"sale", authority.key().as_ref(), sale.token_mint.as_ref()],
+        seeds = [b"sale", sale.authority.as_ref(), sale.token_mint.as_ref()],
         bump = sale.bump,
-        has_one = authority,
         constraint = (
-            sale.status == SaleStatus::CommitmentEnded || 
-            sale.status == SaleStatus::Proposed || 
-            sale.status == SaleStatus::Verifying 
+            sale.status == SaleStatus::CommitmentEnded ||
+            sale.status == SaleStatus::Proposed ||
+            sale.status == SaleStatus::Verifying
         ) @ ErrorCode::InvalidSaleStatus,
     )]
     pub sale: Account<'info, Sale>,
-    pub authority: Signer<'info>,
+    pub proposer: Signer<'info>,
 }
 
 pub const PROPOSAL_COOLDOWN_SECONDS: i64 = 60;
@@ -38,6 +41,17 @@ pub fn handler_propose_settlement(
         now > sale.commitment_end,
         ErrorCode::CommitmentWindowNotEnded
     );
+
+    // Authority-first window: only authority can propose in the first 30 minutes
+    let authority_window_end = sale.commitment_ended_at
+        .checked_add(AUTHORITY_PROPOSAL_WINDOW_SECONDS)
+        .ok_or(ErrorCode::ArithmeticOverflow)?;
+    if now < authority_window_end {
+        require!(
+            ctx.accounts.proposer.key() == sale.authority,
+            ErrorCode::Unauthorized
+        );
+    }
 
     if sale.last_proposal_time == 0 {
         let min_proposal_time = sale.commitment_end
@@ -147,7 +161,7 @@ pub fn handler_propose_settlement(
     sale.fill_rate = Some(fill_rate);
     sale.marginal_user = marginal_user;
     sale.marginal_allocation = marginal_allocation;
-    sale.proposer = Some(ctx.accounts.authority.key());
+    sale.proposer = Some(ctx.accounts.proposer.key());
 
     sale.verification_count = 0;
     sale.running_sum = 0;
@@ -163,7 +177,7 @@ pub fn handler_propose_settlement(
         fill_rate,
         marginal_user,
         marginal_allocation,
-        ctx.accounts.authority.key()
+        ctx.accounts.proposer.key()
     );
 
     emit!(SettlementProposed {

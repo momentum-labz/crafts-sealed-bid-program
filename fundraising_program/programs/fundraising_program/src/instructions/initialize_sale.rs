@@ -146,6 +146,7 @@ pub fn handler_initialize_sale(
     sale.drand_chain_hash = QUICKNET_CHAIN_HASH;
     sale.reveal_count = 0;
     sale.all_bids_revealed = false;
+    sale.commitment_ended_at = 0;
 
     msg!("Sale initialized: {:?}", sale.key());
     msg!("Drand reveal round: {}", sale.drand_reveal_round);

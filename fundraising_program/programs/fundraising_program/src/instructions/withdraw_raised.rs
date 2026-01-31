@@ -31,10 +31,9 @@ pub struct WithdrawRaised<'info> {
 
     #[account(
         mut,
-        constraint = authority_usdc_account.mint == usdc_mint.key() @ ErrorCode::InvalidParameters,
-        constraint = authority_usdc_account.owner == authority.key() @ ErrorCode::InvalidParameters,
+        address = sale.usdc_treasury @ ErrorCode::InvalidParameters,
     )]
-    pub authority_usdc_account: Account<'info, TokenAccount>,
+    pub usdc_treasury: Account<'info, TokenAccount>,
 
     pub token_program: Program<'info, Token>,
 }
@@ -66,7 +65,7 @@ pub fn handler_withdraw_raised(ctx: Context<WithdrawRaised>) -> Result<()> {
     let cpi_accounts = TransferChecked {
         from: ctx.accounts.usdc_vault.to_account_info(),
         mint: ctx.accounts.usdc_mint.to_account_info(),
-        to: ctx.accounts.authority_usdc_account.to_account_info(),
+        to: ctx.accounts.usdc_treasury.to_account_info(),
         authority: ctx.accounts.sale.to_account_info(),
     };
 

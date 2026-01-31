@@ -68,6 +68,8 @@ pub fn handler_initialize_sale(
     commitment_start: i64,
     commitment_end: i64,
     score_merkle_root: [u8; 32],
+    usdc_treasury: Pubkey,
+    token_treasury: Pubkey,
 ) -> Result<()> {
     require!(raise_min > 0, ErrorCode::InvalidRaiseRange);  
     require!(raise_min <= raise_max, ErrorCode::InvalidRaiseRange);
@@ -108,6 +110,8 @@ pub fn handler_initialize_sale(
     sale.usdc_mint = ctx.accounts.usdc_mint.key();
     sale.usdc_vault = ctx.accounts.usdc_vault.key();
     sale.token_vault = ctx.accounts.token_vault.key();
+    sale.usdc_treasury = usdc_treasury;
+    sale.token_treasury = token_treasury;
     sale.token_supply = token_supply;
     sale.supply_percentage = supply_percentage;
     sale.raise_min = raise_min;

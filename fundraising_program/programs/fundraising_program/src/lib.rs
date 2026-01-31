@@ -31,6 +31,8 @@ pub mod fundraising_program {
         commitment_start: i64,
         commitment_end: i64,
         score_merkle_root: [u8; 32],
+        usdc_treasury: Pubkey,
+        token_treasury: Pubkey,
     ) -> Result<()> {
         handler_initialize_sale(
             ctx,
@@ -44,6 +46,8 @@ pub mod fundraising_program {
             commitment_start,
             commitment_end,
             score_merkle_root,
+            usdc_treasury,
+            token_treasury,
         )
     }
 

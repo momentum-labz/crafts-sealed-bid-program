@@ -10,6 +10,9 @@ pub struct Sale {
     pub usdc_vault: Pubkey,          // 32 bytes
     pub token_vault: Pubkey,         // 32 bytes
 
+    pub usdc_treasury: Pubkey,       // 32 bytes - Fixed destination for withdraw_raised
+    pub token_treasury: Pubkey,      // 32 bytes - Fixed destination for withdraw_unsold
+
     pub token_supply: u64,           // 8 bytes - Total token supply
     pub supply_percentage: u16,       // 2 bytes - % to sell (in bps, e.g., 2500 = 25%)
     pub raise_min: u64,              // 8 bytes - Min USDC to raise

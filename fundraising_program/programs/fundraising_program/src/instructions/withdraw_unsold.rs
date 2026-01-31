@@ -35,10 +35,9 @@ pub struct WithdrawUnsold<'info> {
 
     #[account(
         mut,
-        constraint = authority_token_account.mint == token_mint.key() @ ErrorCode::InvalidParameters,
-        constraint = authority_token_account.owner == authority.key() @ ErrorCode::InvalidParameters,
+        address = sale.token_treasury @ ErrorCode::InvalidParameters,
     )]
-    pub authority_token_account: Account<'info, TokenAccount>,
+    pub token_treasury: Account<'info, TokenAccount>,
 
     pub token_program: Program<'info, Token>,
 }
@@ -91,7 +90,7 @@ pub fn handler_withdraw_unsold(ctx: Context<WithdrawUnsold>) -> Result<()> {
     let cpi_accounts = TransferChecked {
         from: ctx.accounts.token_vault.to_account_info(),
         mint: ctx.accounts.token_mint.to_account_info(),
-        to: ctx.accounts.authority_token_account.to_account_info(),
+        to: ctx.accounts.token_treasury.to_account_info(),
         authority: ctx.accounts.sale.to_account_info(),
     };
 

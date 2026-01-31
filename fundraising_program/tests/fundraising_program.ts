@@ -209,6 +209,7 @@ describe('V0.2-Drand Sealed-Bid Auction', () => {
   let usdcVault: PublicKey
   let tokenVault: PublicKey
   let authorityTokenAccount: PublicKey
+  let authorityUsdcAccount: PublicKey
 
   // Test users
   const NUM_USERS = 3
@@ -268,8 +269,9 @@ describe('V0.2-Drand Sealed-Bid Auction', () => {
     usdcMint = await createMint(connection, authority, authority.publicKey, null, 6)
     console.log(`USDC mint: ${usdcMint.toBase58()}`)
 
-    // Create authority token account and mint tokens
+    // Create authority token + USDC accounts (used as treasury destinations)
     authorityTokenAccount = await createAssociatedTokenAccount(connection, authority, tokenMint, authority.publicKey)
+    authorityUsdcAccount = await createAssociatedTokenAccount(connection, authority, usdcMint, authority.publicKey)
 
     await mintTo(connection, authority, tokenMint, authorityTokenAccount, authority.publicKey, 1_000_000_000 * 1e6)
 
@@ -345,6 +347,8 @@ describe('V0.2-Drand Sealed-Bid Auction', () => {
         new BN(commitmentStart),
         new BN(commitmentEnd),
         Array.from(merkleTree.root),
+        authorityUsdcAccount,
+        authorityTokenAccount,
       )
       .accounts({
         sale: salePda,
@@ -814,5 +818,64 @@ describe('V0.2-Drand Sealed-Bid Auction', () => {
     console.log(`  TX: ${claimTx.substring(0, 16)}...`)
 
     console.log('\n=== All V0.2-Drand Tests Complete! ===')
+  })
+
+  it('Should reject withdraw_raised to non-treasury address', async () => {
+    console.log('\n=== Test 9: Withdraw to Wrong Address (should fail) ===')
+
+    // Create a rogue USDC account owned by authority but NOT the treasury
+    const rogueKeypair = Keypair.generate()
+    await connection.requestAirdrop(rogueKeypair.publicKey, LAMPORTS_PER_SOL)
+    await sleep(500)
+    const rogueUsdcAccount = await createAssociatedTokenAccount(connection, authority, usdcMint, rogueKeypair.publicKey)
+
+    try {
+      await program.methods
+        .withdrawRaised()
+        .accounts({
+          sale: salePda,
+          authority: authority.publicKey,
+          usdcMint: usdcMint,
+          usdcVault: usdcVault,
+          usdcTreasury: rogueUsdcAccount,
+          tokenProgram: TOKEN_PROGRAM_ID,
+        })
+        .rpc()
+
+      assert.fail('Should have rejected non-treasury address')
+    } catch (err: any) {
+      console.log(`✓ Correctly rejected: ${err.error?.errorCode?.code || err.message}`)
+      assert.ok(
+        err.message.includes('ConstraintAddress') || err.message.includes('InvalidParameters') || err.error?.errorCode?.code === 'ConstraintAddress',
+        `Expected ConstraintAddress error, got: ${err.message}`
+      )
+    }
+  })
+
+  it('Should withdraw raised USDC to treasury', async () => {
+    console.log('\n=== Test 10: Withdraw Raised to Treasury ===')
+
+    const vaultBefore = await getAccount(connection, usdcVault)
+    console.log(`  Vault balance before: ${vaultBefore.amount}`)
+
+    const tx = await program.methods
+      .withdrawRaised()
+      .accounts({
+        sale: salePda,
+        authority: authority.publicKey,
+        usdcMint: usdcMint,
+        usdcVault: usdcVault,
+        usdcTreasury: authorityUsdcAccount,
+        tokenProgram: TOKEN_PROGRAM_ID,
+      })
+      .rpc()
+
+    const treasuryBalance = await getAccount(connection, authorityUsdcAccount)
+    console.log(`✓ Treasury received: ${treasuryBalance.amount}`)
+    console.log(`  TX: ${tx.substring(0, 16)}...`)
+
+    const sale = await program.account.sale.fetch(salePda)
+    expect(sale.status).to.have.property('finalized')
+    console.log('✓ Sale status: Finalized')
   })
 })

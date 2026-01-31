@@ -229,6 +229,9 @@ describe('V0.2-Drand Sealed-Bid Auction', () => {
     { userIndex: 2, amount: 80_000, maxFdv: 1_000_000, score: 100 },
   ]
 
+  // Track the effective max_fdv per user (may be updated via update_bid)
+  const effectiveMaxFdv: number[] = []
+
   const CLEARING_FDV = new BN(1_000_000 * 1e6)
 
   before(async () => {
@@ -464,12 +467,63 @@ describe('V0.2-Drand Sealed-Bid Auction', () => {
 
       console.log(`[User ${i}] ✓ Committed $${bid.amount.toLocaleString()} with encrypted bid`)
       console.log(`[User ${i}] TX: ${tx.substring(0, 16)}...`)
+
+      effectiveMaxFdv.push(bid.maxFdv * 1e6)
     }
 
     const sale = await program.account.sale.fetch(salePda)
     assert.equal(sale.totalUsers, testBids.length)
 
     console.log(`\n✓ All ${testBids.length} users committed with encrypted bids`)
+  })
+
+  it('Should allow user to update bid price', async () => {
+    console.log('\n=== Test 2.5: Update Bid Price ===')
+
+    const userIndex = 0
+    const user = users[userIndex]
+    const newMaxFdv = 1_800_000 // changed from $2M to $1.8M
+    const [sealedBidPda] = getSealedBidPda(program.programId, salePda, user.publicKey)
+
+    // Generate new salt and encrypt new bid
+    const newSalt = randomBytes(16)
+    console.log(`[User ${userIndex}] Encrypting updated bid: $${newMaxFdv.toLocaleString()} FDV...`)
+    const newEncryptedBid = await encryptBid(newMaxFdv * 1e6, newSalt, drandRevealRound)
+
+    // New hash commitment
+    const maxFdvBuffer = Buffer.alloc(8)
+    maxFdvBuffer.writeBigUInt64LE(BigInt(newMaxFdv * 1e6))
+    const hashInput = Buffer.concat([maxFdvBuffer, newSalt])
+    const newHashCommitment = sha256(hashInput)
+
+    console.log(`[User ${userIndex}] Submitting update_bid transaction...`)
+    const tx = await program.methods
+      .updateBid(
+        newEncryptedBid,
+        new BN(drandRevealRound),
+        Array.from(newHashCommitment) as any,
+      )
+      .accounts({
+        sale: salePda,
+        sealedBid: sealedBidPda,
+        user: user.publicKey,
+      })
+      .signers([user])
+      .rpc()
+
+    // Verify on-chain state updated
+    const bid = await program.account.sealedBid.fetch(sealedBidPda)
+    assert.deepEqual(Array.from(bid.hashCommitment), Array.from(newHashCommitment))
+    assert.equal(bid.bidRevealed, false)
+    // Amount should be unchanged
+    assert.equal(bid.amount.toNumber(), testBids[userIndex].amount * 1e6)
+
+    // Track the updated max_fdv for reveal verification
+    effectiveMaxFdv[userIndex] = newMaxFdv * 1e6
+
+    console.log(`[User ${userIndex}] ✓ Bid updated to $${newMaxFdv.toLocaleString()} FDV`)
+    console.log(`  TX: ${tx.substring(0, 16)}...`)
+    console.log(`  Amount unchanged: $${testBids[userIndex].amount.toLocaleString()}`)
   })
 
   it('Should close commitment window', async () => {
@@ -579,6 +633,9 @@ describe('V0.2-Drand Sealed-Bid Auction', () => {
 
       const encryptedData = Buffer.from(bid.maxFdvEncrypted)
       const { maxFdv: decryptedMaxFdv, salt } = await decryptBid(encryptedData, drandRevealRound)
+
+      // Verify decrypted value matches what we expect (including updates)
+      assert.equal(decryptedMaxFdv, effectiveMaxFdv[i], `User ${i} decrypted max_fdv mismatch`)
 
       revealedBids.push({
         user: users[testBids[i].userIndex].publicKey,

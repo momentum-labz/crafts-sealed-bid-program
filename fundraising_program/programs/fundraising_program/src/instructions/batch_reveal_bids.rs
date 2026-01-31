@@ -11,6 +11,7 @@ pub const MAX_REVEAL_BATCH_SIZE: usize = 20;
 pub struct RevealedBidData {
     pub user: Pubkey,
     pub max_fdv: u64,
+    pub salt: [u8; 16],
 }
 
 #[derive(Accounts)]
@@ -80,7 +81,7 @@ pub fn handler_batch_reveal_bids<'info>(
 
         let mut hasher = Sha256::new();
         hasher.update(&revealed_bid.max_fdv.to_le_bytes());
-        hasher.update(&bid.salt);
+        hasher.update(&revealed_bid.salt);
         let computed_hash: [u8; 32] = hasher.finalize().into();
         require!(
             computed_hash == bid.hash_commitment,

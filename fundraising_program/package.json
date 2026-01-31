@@ -10,6 +10,7 @@
     "test:stress:1k": "cross-env RUN_STRESS_TESTS=true ts-mocha -p ./tsconfig.json -t 600000 tests/**/*.ts",
     "test:stress:5k": "cross-env RUN_STRESS_TESTS=true RUN_5K_TEST=true ts-mocha -p ./tsconfig.json -t 1800000 tests/**/*.ts"
   },
+  "packageManager": "yarn@1.22.22",
   "dependencies": {
     "@coral-xyz/anchor": "^0.32.1",
     "@solana/spl-token": "^0.4.14",

@@ -109,11 +109,13 @@ async function getCurrentDrandRound(): Promise<number> {
   return beacon.round
 }
 
-async function encryptBid(maxFdv: number, round: number): Promise<Buffer> {
-  console.log(`  Encrypting max_fdv=$${(maxFdv / 1e6).toFixed(0)} for round ${round}...`)
+async function encryptBid(maxFdv: number, salt: Buffer, round: number): Promise<Buffer> {
+  console.log(`  Encrypting max_fdv=$${(maxFdv / 1e6).toFixed(0)} || salt for round ${round}...`)
 
-  const message = Buffer.alloc(8)
-  message.writeBigUInt64LE(BigInt(maxFdv))
+  // Embed max_fdv || salt in the timelock ciphertext
+  const maxFdvBuffer = Buffer.alloc(8)
+  maxFdvBuffer.writeBigUInt64LE(BigInt(maxFdv))
+  const message = Buffer.concat([maxFdvBuffer, salt])
 
   const ciphertext = await timelockEncrypt(round, message, drandClient)
 
@@ -135,13 +137,14 @@ async function fetchDrandSignature(round: number): Promise<Buffer> {
   return signature
 }
 
-async function decryptBid(ciphertext: Buffer, round: number): Promise<number> {
+async function decryptBid(ciphertext: Buffer, round: number): Promise<{ maxFdv: number; salt: Buffer }> {
   console.log(`  Decrypting bid for round ${round}...`)
   const ciphertextStr = ciphertext.toString()
-  const decrypted = await timelockDecrypt(ciphertextStr, drandClient)
-  const maxFdv = Number(Buffer.from(decrypted).readBigUInt64LE(0))
-  console.log(`  ✓ Decrypted max_fdv=$${(maxFdv / 1e6).toFixed(0)}`)
-  return maxFdv
+  const decrypted = Buffer.from(await timelockDecrypt(ciphertextStr, drandClient))
+  const maxFdv = Number(decrypted.readBigUInt64LE(0))
+  const salt = decrypted.subarray(8, 24) // 16 bytes of salt after 8-byte max_fdv
+  console.log(`  ✓ Decrypted max_fdv=$${(maxFdv / 1e6).toFixed(0)}, salt=${salt.toString('hex').substring(0, 16)}...`)
+  return { maxFdv, salt }
 }
 
 async function sleep(ms: number) {
@@ -421,18 +424,20 @@ describe('V0.2-Drand Sealed-Bid Auction', () => {
       const proof = merkleTree.getProof(userInfo.index)
       const proofArrays = proofToAnchorFormat(proof)
 
-      console.log(`[User ${i}] Encrypting bid with drand...`)
+      // Generate salt client-side (never sent to chain)
+      // Use 16-byte salt to keep timelock ciphertext within tx size limits
+      const salt = randomBytes(16)
 
-      const encryptedBid = await encryptBid(bid.maxFdv * 1e6, drandRevealRound)
+      console.log(`[User ${i}] Encrypting bid with drand (max_fdv || salt)...`)
+      const encryptedBid = await encryptBid(bid.maxFdv * 1e6, salt, drandRevealRound)
       console.log(`[User ${i}] ✓ Bid encrypted successfully`)
 
-      // Hash commitment
-      const salt = randomBytes(32)
+      // Hash commitment: SHA256(max_fdv || salt) — salt stays off-chain
       const maxFdvBuffer = Buffer.alloc(8)
       maxFdvBuffer.writeBigUInt64LE(BigInt(bid.maxFdv * 1e6))
       const hashInput = Buffer.concat([maxFdvBuffer, salt])
       const hashCommitment = sha256(hashInput)
-      console.log(`[User ${i}] ✓ Hash commitment generated (salt: ${salt.toString('hex').substring(0, 16)}...)`)
+      console.log(`[User ${i}] ✓ Hash commitment generated (salt kept client-side)`)
 
       console.log(`[User ${i}] Submitting commit transaction...`)
       const tx = await program.methods
@@ -443,7 +448,6 @@ describe('V0.2-Drand Sealed-Bid Auction', () => {
           bid.score,
           proofArrays as any,
           Array.from(hashCommitment) as any,
-          Array.from(salt) as any,
         )
         .accounts({
           sale: salePda,
@@ -571,14 +575,15 @@ describe('V0.2-Drand Sealed-Bid Auction', () => {
     const revealedBids = []
     for (let i = 0; i < testBids.length; i++) {
       const bid = await program.account.sealedBid.fetch(userSealedBidPdas[i])
-      console.log(`[User ${i}] Decrypting bid...`)
+      console.log(`[User ${i}] Decrypting bid (max_fdv || salt)...`)
 
       const encryptedData = Buffer.from(bid.maxFdvEncrypted)
-      const decryptedMaxFdv = await decryptBid(encryptedData, drandRevealRound)
+      const { maxFdv: decryptedMaxFdv, salt } = await decryptBid(encryptedData, drandRevealRound)
 
       revealedBids.push({
         user: users[testBids[i].userIndex].publicKey,
         maxFdv: new BN(decryptedMaxFdv),
+        salt: Array.from(salt),
       })
       console.log(`[User ${i}] ✓ Decrypted: $${(decryptedMaxFdv / 1e6).toFixed(0)}`)
     }

@@ -18,9 +18,11 @@ The program implements a sealed-bid token auction with drand timelock encryption
 | 2 | CRITICAL | Salt stored on-chain | ✅ FIXED | Removed `salt` from `SealedBid`. Salt now embedded in timelock ciphertext (`max_fdv \|\| salt`), provided by cranker at reveal time. On-chain SHA256 check verifies correctness. |
 | 3 | HIGH | Authority can refund from Settled | ✅ FIXED | Removed `SaleStatus::Settled` from `refund_sale` constraints. Added `Revealing` and `CommitmentEnded` as valid escape hatches. |
 | 4 | HIGH | `init_if_needed` reinitialization | ✅ FIXED | Replaced with explicit `init` on `commit` + separate `topup_commit` instruction. Anchor rejects duplicate PDA creation automatically. |
-| 5 | MEDIUM | No upgrade authority governance | 📝 DOCUMENTED | Inline recommendations for Squads multisig, timelock, role separation. Requires operational decision. |
+| 5 | MEDIUM | No upgrade authority governance | ✅ PARTIALLY FIXED | `propose_settlement` now permissionless after 30-min authority window. Withdrawals locked to treasury addresses set at init. Remaining: multisig for pause/cancel/refund. |
 | 6 | MEDIUM | Cannot update bid price | ✅ FIXED | Added `update_bid` instruction — users can replace `hash_commitment` and `max_fdv_encrypted` during the commitment window. |
 | 7 | LOW | `reveal_count` boundary | ⚠️ ACCEPTED | Mitigated by `bid_revealed` flag. No code change needed. |
+| 8 | NEW | Withdraw destination unrestricted | ✅ FIXED | Added `usdc_treasury` and `token_treasury` fields to `Sale`, set at init. Withdrawals constrained to these addresses. |
+| 9 | NEW | `propose_settlement` authority-gated | ✅ FIXED | Permissionless after 30-min authority window post-CommitmentEnded. Prevents stuck sales. |
 
 ---
 
@@ -80,13 +82,19 @@ This eliminates the reinitialization risk class entirely.
 
 ## Medium Severity Issues
 
-### 5. No upgrade authority governance 📝 DOCUMENTED
+### 5. No upgrade authority governance ✅ PARTIALLY FIXED
 
-**Severity**: MEDIUM
+**Severity**: MEDIUM → **PARTIALLY FIXED**
 
-A single authority key controls all admin operations: initialization, funding, settlement proposal, pausing, cancellation, and refund mode. There is no multisig requirement or timelock on any critical operation.
+A single authority key originally controlled all admin operations. Three mitigations implemented:
 
-**Recommendation** (documented in `initialize_sale.rs`): Use a Squads multisig as the authority, add timelocks for critical operations, and consider separating roles (proposer vs admin vs emergency). This is an operational decision rather than a code fix.
+1. **Permissionless `propose_settlement`**: Authority gets a 30-minute exclusive window after `CommitmentEnded`. After that, anyone can propose — the sale can never get stuck waiting for the authority. Runtime check in handler: `if now < commitment_ended_at + 1800, require proposer == authority`.
+
+2. **Treasury-locked withdrawals**: `usdc_treasury` and `token_treasury` are set at `initialize_sale` and cannot be changed. `withdraw_raised` and `withdraw_unsold` constrain the destination to these addresses via `address = sale.usdc_treasury`. Even a compromised authority cannot redirect funds.
+
+3. **Already permissionless**: `batch_reveal_bids`, `verify_and_allocate`, `batch_verify_and_allocate`, `finalize_settlement`, `close_commitment_window` — all callable by any signer.
+
+**Remaining**: `pause_sale`, `unpause_sale`, `cancel_sale`, `refund_sale`, `enable_claims`, `fund_sale` still require authority. Recommend Squads multisig for the authority key in production.
 
 ### 6. Cumulative commits cannot update bid price ✅ FIXED
 
@@ -105,6 +113,26 @@ Users could not change their max FDV bid after the initial commit.
 **Severity**: LOW
 
 No explicit check that `reveal_count + revealed_count <= total_users`. Mitigated by `bid_revealed` flag preventing double-reveal. The `>=` comparison for transitioning to CommitmentEnded handles the boundary correctly.
+
+---
+
+## Additional Fixes (discovered during hardening)
+
+### 8. Withdraw destination unrestricted ✅ FIXED
+
+**Severity**: HIGH (new finding) → **FIXED**
+
+`withdraw_raised` and `withdraw_unsold` accepted any token account as the destination. A compromised authority key could redirect all raised USDC or unsold tokens to an attacker-controlled address.
+
+**Fix**: Added `usdc_treasury` and `token_treasury` fields to `Sale`, set once during `initialize_sale`. Both withdraw instructions now use `address = sale.usdc_treasury` / `address = sale.token_treasury` constraints. The destination is immutable after sale creation. Test confirms withdrawal to a non-treasury address is rejected with `ConstraintAddress`.
+
+### 9. `propose_settlement` authority-gated (stuck sale risk) ✅ FIXED
+
+**Severity**: MEDIUM (new finding) → **FIXED**
+
+If the authority key was lost or the authority became unresponsive after bids were revealed, no one could propose settlement. The sale would be permanently stuck in `CommitmentEnded` state — users' USDC locked in the vault.
+
+**Fix**: `propose_settlement` is now permissionless with a 30-minute authority-first window. Added `commitment_ended_at` timestamp to `Sale` (set in `batch_reveal_bids` when transitioning to `CommitmentEnded`). In the handler, if `now < commitment_ended_at + 1800`, the signer must be the authority (`Unauthorized` error). After 1800 seconds, any signer can propose. The PDA seed derivation uses `sale.authority` (stored value) instead of the signer's key.
 
 ---
 
@@ -133,14 +161,16 @@ No explicit check that `reveal_count + revealed_count <= total_users`. Mitigated
 3. ~~**Restrict `refund_sale` from Settled state**~~ — ✅ Removed `Settled` from allowed states. Added `Revealing` and `CommitmentEnded`.
 4. ~~**Remove `init_if_needed`**~~ — ✅ Replaced with explicit `init` + `topup_commit` instructions.
 5. ~~**Allow bid price updates**~~ — ✅ Added `update_bid` instruction.
+6. ~~**Lock withdraw destinations to treasury**~~ — ✅ `usdc_treasury` and `token_treasury` set at init, enforced via address constraints.
+7. ~~**Make `propose_settlement` permissionless**~~ — ✅ 30-min authority window, then open to anyone.
 
 ### Remaining
 
-6. **Add upgrade authority governance**. Use a multisig (e.g., Squads) for the authority key, or add a timelock for critical operations. (MEDIUM — operational decision)
-7. **Add drand liveness fallback**. If the drand round hasn't been submitted within a timeout, allow fallback reveal or cancellation. (MEDIUM)
-8. **Add event indexing** for off-chain monitoring. (LOW)
-9. **Consider a dispute/challenge period** before finalization. (LOW)
-10. **Add per-user maximum bid amount** (currently only per-sale `raise_max`). (LOW)
+8. **Add multisig for remaining authority operations**. `pause/unpause`, `cancel`, `refund`, `enable_claims`, `fund_sale` still single-signer. Use Squads multisig in production. (MEDIUM — operational)
+9. **Add drand liveness fallback**. If the drand round hasn't been submitted within a timeout, allow fallback reveal or cancellation. (MEDIUM)
+10. **Add event indexing** for off-chain monitoring. (LOW)
+11. **Consider a dispute/challenge period** before finalization. (LOW)
+12. **Add per-user maximum bid amount** (currently only per-sale `raise_max`). (LOW)
 
 ---
 

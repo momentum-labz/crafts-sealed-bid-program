@@ -128,7 +128,7 @@ pub fn init_auction_state_callback(
 
     let sale = &mut ctx.accounts.sale;
 
-    // InitAuctionStateOutput is MXEEncryptedStruct<55>: nonce + 55 ciphertexts
+    // InitAuctionStateOutput is MXEEncryptedStruct<STATE_LEN>: nonce + STATE_LEN ciphertexts
     sale.state_nonce = result.field_0.nonce;
     sale.encrypted_state = result.field_0.ciphertexts;
 

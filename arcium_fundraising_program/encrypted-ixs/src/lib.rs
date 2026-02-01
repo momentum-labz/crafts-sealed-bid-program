@@ -4,7 +4,7 @@ use arcis::encrypted;
 mod circuits {
     use arcis::*;
 
-    const MAX_BUCKET_COUNT: usize = 200;
+    const MAX_BUCKET_COUNT: usize = 100;
     const STATE_LEN: usize = MAX_BUCKET_COUNT + 5;
 
     #[instruction]

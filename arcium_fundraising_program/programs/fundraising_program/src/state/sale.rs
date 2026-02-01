@@ -61,7 +61,7 @@ pub struct Sale {
     pub is_paused: bool,             // 1 byte
     pub claims_enabled: bool,        // 1 byte
 
-    // Arcium encrypted auction state (MXEEncryptedStruct<55>: nonce + ciphertexts)
+    // Arcium encrypted auction state (MXEEncryptedStruct<STATE_LEN>: nonce + ciphertexts)
     // Must be contiguous: nonce then ciphertexts, for account() reference
     pub state_nonce: u128,           // 16 bytes - Nonce for MXE encryption
     pub encrypted_state: [[u8; 32]; STATE_LEN],  // STATE_LEN * 32 bytes

@@ -1,0 +1,8 @@
+node_offset = 4
+
+[solana]
+rpc_url = "http://host.docker.internal:8899"
+ws_url = "ws://host.docker.internal:8900"
+
+[solana.commitment]
+commitment = "confirmed"

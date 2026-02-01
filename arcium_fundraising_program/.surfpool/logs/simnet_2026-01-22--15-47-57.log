@@ -1,2 +1,0 @@
-[2026-01-22--15-47-57 ERROR surfpool::cli::simnet] Failed to start subgraph and explorer server: Address already in use (os error 98)
-[2026-01-22--15-47-57 ERROR surfpool::cli] RPC port 8899 is already in use. Try --port or --ws-port to use a different port.

@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 
 /// Maximum number of demand buckets for encrypted auction state
-pub const MAX_BUCKET_COUNT: usize = 200;
+pub const MAX_BUCKET_COUNT: usize = 100;
 /// Total encrypted state slots: MAX_BUCKET_COUNT buckets + bid_count + total_demand + 3 reserved
 pub const STATE_LEN: usize = MAX_BUCKET_COUNT + 5;
 /// Byte offset of state_nonce within Sale account data (after 8-byte discriminator)

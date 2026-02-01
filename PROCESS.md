@@ -35,9 +35,9 @@ stateDiagram-v2
     CommitmentEnded --> Proposed : propose_settlement (authority)
     CommitmentEnded --> Refunding : refund_sale (authority)
 
-    Proposed --> Verifying : verify_and_allocate (first bid verified)
     Proposed --> Proposed : propose_settlement (re-propose with cooldown)
     Proposed --> Refunding : refund_sale (authority)
+    Proposed --> Verifying : verify_and_allocate (first bid verified)
 
     Verifying --> Settled : finalize_settlement (all verified, bounds check)
     Verifying --> Proposed : propose_settlement (re-propose resets verification)

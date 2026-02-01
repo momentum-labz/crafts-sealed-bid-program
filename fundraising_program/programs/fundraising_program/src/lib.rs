@@ -31,6 +31,8 @@ pub mod fundraising_program {
         commitment_start: i64,
         commitment_end: i64,
         score_merkle_root: [u8; 32],
+        usdc_treasury: Pubkey,
+        token_treasury: Pubkey,
     ) -> Result<()> {
         handler_initialize_sale(
             ctx,
@@ -44,6 +46,8 @@ pub mod fundraising_program {
             commitment_start,
             commitment_end,
             score_merkle_root,
+            usdc_treasury,
+            token_treasury,
         )
     }
 
@@ -66,6 +70,24 @@ pub mod fundraising_program {
         handler_commit(ctx, amount, max_fdv_encrypted, drand_round, score, score_proof, hash_commitment)
     }
 
+    /// Update bid price (new encrypted bid + hash commitment)
+    pub fn update_bid(
+        ctx: Context<UpdateBid>,
+        max_fdv_encrypted: Vec<u8>,
+        drand_round: u64,
+        hash_commitment: [u8; 32],
+    ) -> Result<()> {
+        handler_update_bid(ctx, max_fdv_encrypted, drand_round, hash_commitment)
+    }
+
+    /// Top up an existing bid with additional USDC
+    pub fn topup_commit(
+        ctx: Context<TopupCommit>,
+        amount: u64,
+    ) -> Result<()> {
+        handler_topup_commit(ctx, amount)
+    }
+
     /// Close commitment window and transition to revealing status
     pub fn close_commitment_window(ctx: Context<CloseCommitmentWindow>) -> Result<()> {
         handler_close_commitment_window(ctx)
@@ -82,6 +104,7 @@ pub mod fundraising_program {
     }
 
     /// fill_rate is in basis points: 10000 = 100%, 5000 = 50% (2x oversubscribed)
+    /// Permissionless after 30-minute authority window following CommitmentEnded.
     pub fn propose_settlement(
         ctx: Context<ProposeSettlement>,
         clearing_fdv: u64,

@@ -8,73 +8,101 @@
 
 ## Summary
 
-The program implements a sealed-bid token auction with drand timelock encryption. The core auction mechanics (state machine, allocation math, finalization checks) are well-structured. However, the cryptographic foundation has critical gaps: the drand BLS signature is not actually verified, and the hash commitment salt is stored on-chain, which together mean bids are not sealed in practice.
+The program implements a sealed-bid token auction with drand timelock encryption. The core auction mechanics (state machine, allocation math, finalization checks) are well-structured. The initial review found critical cryptographic gaps and several high/medium issues. All critical and high issues have been fixed; medium issues have been resolved or documented.
+
+### Fix Status
+
+| # | Severity | Issue | Status | Fix |
+|---|----------|-------|--------|-----|
+| 1 | CRITICAL | Drand signature not verified | ✅ RESOLVED | Not needed — SHA256 hash commitment + timelock encryption provide security without on-chain BLS |
+| 2 | CRITICAL | Salt stored on-chain | ✅ FIXED | Removed `salt` from `SealedBid`. Salt now embedded in timelock ciphertext (`max_fdv \|\| salt`), provided by cranker at reveal time. On-chain SHA256 check verifies correctness. |
+| 3 | HIGH | Authority can refund from Settled | ✅ FIXED | Removed `SaleStatus::Settled` from `refund_sale` constraints. Added `Revealing` and `CommitmentEnded` as valid escape hatches. |
+| 4 | HIGH | `init_if_needed` reinitialization | ✅ FIXED | Replaced with explicit `init` on `commit` + separate `topup_commit` instruction. Anchor rejects duplicate PDA creation automatically. |
+| 5 | MEDIUM | No upgrade authority governance | ✅ PARTIALLY FIXED | `propose_settlement` now permissionless after 30-min authority window. Withdrawals locked to treasury addresses set at init. Remaining: multisig for pause/cancel/refund. |
+| 6 | MEDIUM | Cannot update bid price | ✅ FIXED | Added `update_bid` instruction — users can replace `hash_commitment` and `max_fdv_encrypted` during the commitment window. |
+| 7 | LOW | `reveal_count` boundary | ⚠️ ACCEPTED | Mitigated by `bid_revealed` flag. No code change needed. |
+| 8 | NEW | Withdraw destination unrestricted | ✅ FIXED | Added `usdc_treasury` and `token_treasury` fields to `Sale`, set at init. Withdrawals constrained to these addresses. |
+| 9 | NEW | `propose_settlement` authority-gated | ✅ FIXED | Permissionless after 30-min authority window post-CommitmentEnded. Prevents stuck sales. |
 
 ---
 
 ## Critical Issues
 
-### 1. Drand signature not verified — `drand.rs:25-45`
+### 1. Drand signature not verified — `drand.rs:25-45` ✅ RESOLVED
 
-**Severity**: CRITICAL
+**Severity**: CRITICAL → **RESOLVED (by design)**
 
 The `verify_drand_signature` function does not perform BLS12-381 signature verification. It only checks:
 - Chain hash matches `QUICKNET_CHAIN_HASH`
 - Signature is not all-zeros
 - Signature is not all-0xFF
 
-Any 48 bytes that aren't trivially zero/FF will pass. This means anyone can call `batch_reveal_bids` with a fabricated signature.
+**Resolution**: On-chain BLS verification is unnecessary. With salt removed from on-chain storage (see #2), the SHA256 hash commitment prevents anyone from submitting a valid reveal without the salt — which is locked inside the timelock ciphertext until the drand round fires. The state machine + `Clock::get()` enforces timing. Solana supports BLS12-381 via SIMD-0129 (~100k-200k CU) if belt-and-suspenders verification is ever desired.
 
-**Impact**: The drand timelock property is completely bypassed. Bids can be revealed at any time during the Revealing phase without the actual drand beacon output.
+### 2. Salt stored on-chain — `commit.rs:131` ✅ FIXED
 
-### 2. Salt stored on-chain — `commit.rs:131`
+**Severity**: CRITICAL → **FIXED**
 
-**Severity**: CRITICAL
+The bid salt was stored in the `SealedBid` account: `bid.salt = salt`. Since all Solana account data is publicly readable, anyone could brute-force the hash commitment.
 
-The bid salt is stored in the `SealedBid` account: `bid.salt = salt`. Since all Solana account data is publicly readable, anyone can:
+**Fix**: Removed `salt` field from `SealedBid` struct and `salt` parameter from `commit` instruction. Salt is now:
+1. Generated client-side (16 bytes) and kept off-chain
+2. Embedded in the timelock ciphertext: `encrypt(max_fdv || salt, drand_round)`
+3. Stored on-chain only as `hash_commitment = SHA256(max_fdv || salt)`
+4. Recovered at reveal time by decrypting the ciphertext, then submitted by the cranker
+5. Verified on-chain: `SHA256(max_fdv || salt) == hash_commitment` (~1000 CU)
 
-1. Read the salt from the SealedBid account
-2. Iterate over all `max_fdv` values in `[fdv_min, fdv_max]`
-3. Compute `SHA256(max_fdv || salt)` for each
-4. Match against `hash_commitment`
-
-The hash commitment scheme provides **zero privacy** when the salt is public.
-
-**Combined impact of issues 1 + 2**: Bids are effectively public during the commitment phase. Any observer can determine every bidder's max FDV in real-time, defeating the sealed-bid property entirely.
+16-byte salt is used (vs 32) to keep the timelock ciphertext within Solana's 1232-byte transaction size limit.
 
 ---
 
 ## High Severity Issues
 
-### 3. Authority can refund from Settled state — `refund_sale.rs:21`
+### 3. Authority can refund from Settled state — `refund_sale.rs:21` ✅ FIXED
 
-**Severity**: HIGH
+**Severity**: HIGH → **FIXED**
 
-The `refund_sale` constraint allows `SaleStatus::Settled`. After all bids are verified and settlement is finalized, the authority can still trigger refund mode. Users who expected tokens at the clearing price would only receive their USDC back.
+The `refund_sale` constraint allowed `SaleStatus::Settled`, letting the authority back out after settlement.
 
-**Impact**: Authority can back out of an unfavorable sale after seeing results. This undermines the binding nature of the auction.
+**Fix**: Removed `SaleStatus::Settled` from the allowed states in `refund_sale.rs`. Added `Revealing` and `CommitmentEnded` as valid refund states (previously missing escape hatches). Once settled, the outcome is binding — users have a right to their allocated tokens.
 
-### 4. `init_if_needed` reinitialization risk — `commit.rs:19-26`
+### 4. `init_if_needed` reinitialization risk — `commit.rs:19-26` ✅ FIXED
 
-**Severity**: HIGH (mitigated to MEDIUM in practice)
+**Severity**: HIGH → **FIXED**
 
-Uses `init_if_needed` for SealedBid accounts. While mitigated by the `is_initialized` flag check and unique PDA derivation `[b"sealed_bid", sale, user]`, Anchor documentation warns against this pattern. The mitigation appears sufficient but the pattern is inherently risky.
+Used `init_if_needed` for SealedBid accounts, which Anchor docs warn enables reinitialization attacks.
+
+**Fix**: Split into two separate instructions:
+- **`commit`**: Uses Anchor's `init` (not `init_if_needed`) for first-time bid creation. Anchor automatically rejects a second `init` call for the same PDA.
+- **`topup_commit`**: Adds USDC to an existing bid. Uses `mut` with constraint checks (`is_initialized`, `sale`, `user`, `!claimed`). No account creation.
+
+This eliminates the reinitialization risk class entirely.
 
 ---
 
 ## Medium Severity Issues
 
-### 5. No upgrade authority governance
+### 5. No upgrade authority governance ✅ PARTIALLY FIXED
 
-**Severity**: MEDIUM
+**Severity**: MEDIUM → **PARTIALLY FIXED**
 
-A single authority key controls all admin operations: initialization, funding, settlement proposal, pausing, cancellation, and refund mode. There is no multisig requirement or timelock on any critical operation.
+A single authority key originally controlled all admin operations. Three mitigations implemented:
 
-### 6. Cumulative commits cannot update bid price — `commit.rs:154-163`
+1. **Permissionless `propose_settlement`**: Authority gets a 30-minute exclusive window after `CommitmentEnded`. After that, anyone can propose — the sale can never get stuck waiting for the authority. Runtime check in handler: `if now < commitment_ended_at + 1800, require proposer == authority`.
 
-**Severity**: MEDIUM
+2. **Treasury-locked withdrawals**: `usdc_treasury` and `token_treasury` are set at `initialize_sale` and cannot be changed. `withdraw_raised` and `withdraw_unsold` constrain the destination to these addresses via `address = sale.usdc_treasury`. Even a compromised authority cannot redirect funds.
 
-On subsequent commits (top-ups), the `hash_commitment`, `salt`, and `max_fdv_encrypted` are NOT updated — only the USDC amount increases. If a user wants to change their max FDV bid, they cannot. This is a UX limitation that could lead to suboptimal bidding.
+3. **Already permissionless**: `batch_reveal_bids`, `verify_and_allocate`, `batch_verify_and_allocate`, `finalize_settlement`, `close_commitment_window` — all callable by any signer.
+
+**Remaining**: `pause_sale`, `unpause_sale`, `cancel_sale`, `refund_sale`, `enable_claims`, `fund_sale` still require authority. Recommend Squads multisig for the authority key in production.
+
+### 6. Cumulative commits cannot update bid price ✅ FIXED
+
+**Severity**: MEDIUM → **FIXED**
+
+Users could not change their max FDV bid after the initial commit.
+
+**Fix**: Added `update_bid` instruction that allows users to replace their `hash_commitment` and `max_fdv_encrypted` during the commitment window. The user generates a new salt, re-encrypts with the same drand round, and submits the new ciphertext. USDC amount is unchanged (use `topup_commit` to add funds). Constraints ensure the bid hasn't been revealed yet and the sale is still active.
 
 ---
 
@@ -85,6 +113,26 @@ On subsequent commits (top-ups), the `hash_commitment`, `salt`, and `max_fdv_enc
 **Severity**: LOW
 
 No explicit check that `reveal_count + revealed_count <= total_users`. Mitigated by `bid_revealed` flag preventing double-reveal. The `>=` comparison for transitioning to CommitmentEnded handles the boundary correctly.
+
+---
+
+## Additional Fixes (discovered during hardening)
+
+### 8. Withdraw destination unrestricted ✅ FIXED
+
+**Severity**: HIGH (new finding) → **FIXED**
+
+`withdraw_raised` and `withdraw_unsold` accepted any token account as the destination. A compromised authority key could redirect all raised USDC or unsold tokens to an attacker-controlled address.
+
+**Fix**: Added `usdc_treasury` and `token_treasury` fields to `Sale`, set once during `initialize_sale`. Both withdraw instructions now use `address = sale.usdc_treasury` / `address = sale.token_treasury` constraints. The destination is immutable after sale creation. Test confirms withdrawal to a non-treasury address is rejected with `ConstraintAddress`.
+
+### 9. `propose_settlement` authority-gated (stuck sale risk) ✅ FIXED
+
+**Severity**: MEDIUM (new finding) → **FIXED**
+
+If the authority key was lost or the authority became unresponsive after bids were revealed, no one could propose settlement. The sale would be permanently stuck in `CommitmentEnded` state — users' USDC locked in the vault.
+
+**Fix**: `propose_settlement` is now permissionless with a 30-minute authority-first window. Added `commitment_ended_at` timestamp to `Sale` (set in `batch_reveal_bids` when transitioning to `CommitmentEnded`). In the handler, if `now < commitment_ended_at + 1800`, the signer must be the authority (`Unauthorized` error). After 1800 seconds, any signer can propose. The PDA seed derivation uses `sale.authority` (stored value) instead of the signer's key.
 
 ---
 
@@ -106,32 +154,23 @@ No explicit check that `reveal_count + revealed_count <= total_users`. Mitigated
 
 ## Recommended Actions
 
-### Priority 1 — Critical (RESOLVED)
+### Completed
 
-1. ~~**Implement real BLS12-381 signature verification**~~ — **Not needed on-chain.** Solana supports BLS12-381 via SIMD-0129 (pairing, G1/G2 ops, ~100k-200k CU per check), but in our design the SHA256 hash commitment already verifies correctness of revealed bids. The drand timelock encryption provides off-chain privacy; the state machine + `Clock::get()` provides timing enforcement. On-chain BLS verification would only be needed if we wanted to remove clock-based timing entirely.
+1. ~~**Implement real BLS12-381 signature verification**~~ — ✅ Not needed. SHA256 hash commitment + timelock encryption provide security without on-chain BLS.
+2. ~~**Remove salt from on-chain storage**~~ — ✅ Salt embedded in timelock ciphertext, provided at reveal time. Hash commitment verifies correctness.
+3. ~~**Restrict `refund_sale` from Settled state**~~ — ✅ Removed `Settled` from allowed states. Added `Revealing` and `CommitmentEnded`.
+4. ~~**Remove `init_if_needed`**~~ — ✅ Replaced with explicit `init` + `topup_commit` instructions.
+5. ~~**Allow bid price updates**~~ — ✅ Added `update_bid` instruction.
+6. ~~**Lock withdraw destinations to treasury**~~ — ✅ `usdc_treasury` and `token_treasury` set at init, enforced via address constraints.
+7. ~~**Make `propose_settlement` permissionless**~~ — ✅ 30-min authority window, then open to anyone.
 
-2. **Remove salt from on-chain storage** ✅ **IMPLEMENTING** — Embed `max_fdv || salt` in the timelock ciphertext (`max_fdv_encrypted`). Remove `salt` field from `SealedBid` and from `commit` instruction parameters. At reveal time, the cranker/admin decrypts the ciphertext off-chain to obtain both `max_fdv` and `salt`, then submits both. On-chain SHA256 check verifies `SHA256(max_fdv || salt) == hash_commitment`. Salt never stored on-chain, hash commitment still works.
+### Remaining
 
-   **Why this works trustlessly**: Submitting a valid `(max_fdv, salt)` pair that passes the hash check is itself proof of decryption, because the salt only exists inside the timelock ciphertext. Before the drand round, nobody can extract the salt. After it, anyone can decrypt and reveal — no admin required.
-
-### Priority 2 — High
-
-3. **Restrict `refund_sale` from Settled state**. Either remove `SaleStatus::Settled` from the allowed states, or require a timelock/multisig for post-settlement refunds.
-
-4. **Add upgrade authority governance**. Use a multisig (e.g., Squads) for the authority key, or add a timelock for critical operations like cancellation and refund.
-
-### Priority 3 — Medium
-
-5. **Add drand liveness fallback**. If the drand round hasn't been submitted within a timeout after `commitment_end`, allow the authority (or a governance mechanism) to trigger a fallback reveal or cancellation.
-
-6. **Consider removing `init_if_needed`**. Use an explicit `init_bid` instruction followed by a separate `top_up` instruction. This eliminates the reinitialization risk class entirely.
-
-### Priority 4 — Improvements
-
-7. **Add event indexing** for off-chain monitoring (events are partially implemented already).
-8. **Consider a dispute/challenge period** before finalization, allowing bidders to contest the proposed settlement.
-9. **Add per-user maximum bid amount** (currently only per-sale `raise_max` is checked against cumulative bid amount).
-10. **Allow bid price updates** — let users update their `hash_commitment` and `max_fdv_encrypted` during the commitment window (with the same or higher USDC amount).
+8. **Add multisig for remaining authority operations**. `pause/unpause`, `cancel`, `refund`, `enable_claims`, `fund_sale` still single-signer. Use Squads multisig in production. (MEDIUM — operational)
+9. **Add drand liveness fallback**. If the drand round hasn't been submitted within a timeout, allow fallback reveal or cancellation. (MEDIUM)
+10. **Add event indexing** for off-chain monitoring. (LOW)
+11. **Consider a dispute/challenge period** before finalization. (LOW)
+12. **Add per-user maximum bid amount** (currently only per-sale `raise_max`). (LOW)
 
 ---
 

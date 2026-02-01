@@ -6,6 +6,12 @@ use crate::errors::ErrorCode;
 use crate::events::SaleInitialized;
 use crate::utils::{timestamp_to_round, QUICKNET_CHAIN_HASH};
 
+/// NOTE (MEDIUM - Governance): The authority is a single signer with full
+/// control over sale lifecycle (init, fund, propose, pause, cancel, refund).
+/// For production deployments, consider:
+/// 1. Using a Squads multisig as the authority
+/// 2. Adding a timelock for critical operations (cancel, refund)
+/// 3. Separating roles (proposer vs admin vs emergency)
 #[derive(Accounts)]
 pub struct InitializeSale<'info> {
     #[account(
@@ -16,7 +22,7 @@ pub struct InitializeSale<'info> {
         bump,
     )]
     pub sale: Account<'info, Sale>,
-    
+
     #[account(mut)]
     pub authority: Signer<'info>,
     
@@ -62,6 +68,8 @@ pub fn handler_initialize_sale(
     commitment_start: i64,
     commitment_end: i64,
     score_merkle_root: [u8; 32],
+    usdc_treasury: Pubkey,
+    token_treasury: Pubkey,
 ) -> Result<()> {
     require!(raise_min > 0, ErrorCode::InvalidRaiseRange);  
     require!(raise_min <= raise_max, ErrorCode::InvalidRaiseRange);
@@ -102,6 +110,8 @@ pub fn handler_initialize_sale(
     sale.usdc_mint = ctx.accounts.usdc_mint.key();
     sale.usdc_vault = ctx.accounts.usdc_vault.key();
     sale.token_vault = ctx.accounts.token_vault.key();
+    sale.usdc_treasury = usdc_treasury;
+    sale.token_treasury = token_treasury;
     sale.token_supply = token_supply;
     sale.supply_percentage = supply_percentage;
     sale.raise_min = raise_min;
@@ -136,6 +146,7 @@ pub fn handler_initialize_sale(
     sale.drand_chain_hash = QUICKNET_CHAIN_HASH;
     sale.reveal_count = 0;
     sale.all_bids_revealed = false;
+    sale.commitment_ended_at = 0;
 
     msg!("Sale initialized: {:?}", sale.key());
     msg!("Drand reveal round: {}", sale.drand_reveal_round);

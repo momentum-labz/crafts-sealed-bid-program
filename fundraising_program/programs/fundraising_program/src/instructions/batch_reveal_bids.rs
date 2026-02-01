@@ -110,6 +110,7 @@ pub fn handler_batch_reveal_bids<'info>(
     if sale.reveal_count >= sale.total_users {
         sale.all_bids_revealed = true;
         sale.status = SaleStatus::CommitmentEnded;
+        sale.commitment_ended_at = Clock::get()?.unix_timestamp;
         msg!("All bids revealed! Status → CommitmentEnded");
     }
 

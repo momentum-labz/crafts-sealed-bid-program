@@ -12,13 +12,16 @@ pub struct RefundSale<'info> {
         seeds = [b"sale", authority.key().as_ref(), sale.token_mint.as_ref()],
         bump = sale.bump,
         has_one = authority,
-        // Can refund from most states except already finalized or already refunding
+        // Can refund from pre-settlement states only — once Settled, users
+        // have a right to their allocated tokens and the authority cannot
+        // unilaterally revert the outcome.
         constraint = (
             sale.status == SaleStatus::Initialized ||
             sale.status == SaleStatus::Active ||
+            sale.status == SaleStatus::Revealing ||
+            sale.status == SaleStatus::CommitmentEnded ||
             sale.status == SaleStatus::Proposed ||
-            sale.status == SaleStatus::Verifying ||
-            sale.status == SaleStatus::Settled
+            sale.status == SaleStatus::Verifying
         ) @ ErrorCode::InvalidSaleStatus,
     )]
     pub sale: Account<'info, Sale>,

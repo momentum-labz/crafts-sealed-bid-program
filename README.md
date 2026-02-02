@@ -68,7 +68,6 @@ hackathon_submission/
 | **MagicBlock** | Ephemeral rollups for off-chain bid privacy | `magicblock_fundraising_program/` |
 | **RadrLabs** | Surfpool local dev simulator | `Surfpool.toml` in each program |
 | **Helius** | RPC provider for mainnet fork testing | `Surfpool.toml` configs |
-| **Switchboard** | drand oracle integration for timelock reveals | `fundraising_program/` |
 
 ## Build
 

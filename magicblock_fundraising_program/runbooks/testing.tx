@@ -1,0 +1,12 @@
+// Testing runbook for Crafts fundraising
+// This runbook sets up test environment
+
+// Deploy the program
+deploy_program("fundraising_program", "target/deploy/fundraising_program.so")
+
+// Fund test wallets
+// Add your test wallet pubkeys here
+// airdrop("YOUR_WALLET_PUBKEY", 100_000_000_000) // 100 SOL
+
+log("Test environment ready")
+

@@ -1,0 +1,22 @@
+name: fundraising-program
+version: "0.1.0"
+
+environments:
+  localnet:
+    network: surfnet
+    signer: file://~/.config/solana/test-keypair.json
+
+  devnet:
+    network: devnet
+    signer: file://~/.config/solana/devnet-keypair.json
+
+  mainnet:
+    network: mainnet-beta
+    signer: squads://YOUR_SQUAD_MULTISIG
+
+runbooks:
+  deployment:
+    path: ./runbooks/deployment.tx
+  testing:
+    path: ./runbooks/testing.tx
+

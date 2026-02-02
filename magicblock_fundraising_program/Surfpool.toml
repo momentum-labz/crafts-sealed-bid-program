@@ -1,0 +1,32 @@
+[network]
+rpc_url = "https://api.mainnet-beta.solana.com"
+# rpc_url = "https://mainnet.helius-rpc.com/?api-key=YOUR_KEY"
+
+[surfnet]
+# Local Surfnet configuration
+port = 8899
+host = "127.0.0.1"
+slot_time = 400  # milliseconds per slot
+auto_clock_sync = true      # Sync Clock sysvar with blocks
+clock_frequency = 1         # Update every block (400ms)
+
+[studio]
+# Surfpool Studio web interface
+enabled = true
+port = 18488
+
+[programs]
+# Programs to auto-deploy
+fundraising_program = "target/deploy/fundraising_program.so"
+
+[airdrop]
+# Wallets to fund on startup
+wallets = []
+amount = 10000000000000  # 10,000 SOL in lamports
+
+[watch]
+# Auto-redeploy on changes
+enabled = true
+paths = ["programs/"]
+
+

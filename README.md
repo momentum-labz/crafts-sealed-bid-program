@@ -1,6 +1,6 @@
-# Crafts — Sealed Bid Auctions on Solana
+# Crafts — Sealed Bid Uniform Price Auction on Solana
 
-On-chain sealed-bid token auctions with uniform clearing price settlement.
+On-chain sealed-bid token auctions with uniform clearing price settlement, designed for ICO scenarios wiht 10k+ participants.
 
 ## What It Does
 

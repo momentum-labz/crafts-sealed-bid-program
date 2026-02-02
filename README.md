@@ -6,6 +6,8 @@ On-chain sealed-bid token auctions with uniform clearing price settlement, desig
 
 Projects fund a token sale with configurable FDV bounds and raise targets. Bidders commit USDC with encrypted max FDV values. After the commitment window closes, bids are revealed (or computed privately), a clearing price is proposed, and all bids are settled at that uniform price. Bidders above the clearing FDV get tokens; those below get refunded.
 
+This achieves a clearing price with actual demand and a fair price distribution.
+
 ## Implementations
 
 ### v2 — drand (`fundraising_program/`)
